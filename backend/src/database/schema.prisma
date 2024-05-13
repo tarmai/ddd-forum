@@ -8,12 +8,73 @@ generator client {
 }
 
 model User {
-  id String @default(uuid())
+  id Int @unique @default(autoincrement())
   email String  @unique
   username String @unique
   firstName String
   lastName String
   password String
 
+  member    Member?
+
+
   @@map("users")
+}
+
+model Member {
+  id    Int    @id @default(autoincrement())
+
+  user   User @relation(fields: [userId], references: [id])
+  userId Int  @unique // relation scalar field (used in the `@relation` attribute above)
+  posts Post[]
+  votes  Vote[]
+  comments  Comment[]
+
+  @@map("members")
+}
+
+model Post {
+  id             Int       @id @default(autoincrement())
+  memberPostedBy Member    @relation(fields: [memberId], references: [id])
+  memberId       Int       // Foreign key to the Member table
+  postType       String    // 'Text' or 'Link'
+  title          String
+  content        String
+  comments       Comment[]
+  dateCreated    DateTime  @default(now())
+  votes          Vote[]
+
+  @@map("posts")
+}
+
+model Comment {
+  id     Int  @id @default(autoincrement())
+
+  // Foreign key relation to the Post table
+  postId Int // Foreign key to the Post table
+  post   Post @relation(fields: [postId], references: [id])
+  text String
+
+  memberId        Int // Foreign key to the Member table
+  memberPostedBy Member @relation(fields: [memberId], references: [id]) 
+
+  parentCommentId    Int?
+  parentComment Comment? @relation("Replies", fields: [parentCommentId], references: [id])
+  replyComments Comment[] @relation("Replies")
+
+  @@map("comments")
+}
+
+model Vote {
+  id            Int  @id @default(autoincrement())
+
+  postId        Int // Foreign key to the Post table
+  postBelongsTo Post @relation(fields: [postId], references: [id])
+
+  memberId        Int // Foreign key to the Member table
+  memberPostedBy Member @relation(fields: [memberId], references: [id])
+
+  voteType String  // 'Upvote' or 'Downvote'
+
+  @@map("votes")
 }

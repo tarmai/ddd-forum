@@ -5,7 +5,7 @@ import { Errors } from './errors'
 import { isKeyMissed } from './utils/validation'
 import { generateRandomString } from './utils/string'
 
-const prisma = new PrismaClient()
+export const prisma = new PrismaClient()
 
 const app = express()
 app.use(express.json())
@@ -57,9 +57,13 @@ app.post('/users', async (req: Request, res: Response) => {
         .json({ error: Errors.EmailAlreadyInUse, data: undefined, success: false })
     }
 
-    // If not found, create a new user
-    const user = await prisma.user.create({
-      data: { ...userData, password: generateRandomString(10) },
+    // If not found, create a new user and member
+    const { user } = await prisma.$transaction(async (tx) => {
+      const user = await prisma.user.create({
+        data: { ...userData, password: generateRandomString(10) },
+      })
+      const member = await prisma.member.create({ data: { userId: user.id } })
+      return { user, member }
     })
 
     return res
@@ -79,7 +83,7 @@ app.post('/users', async (req: Request, res: Response) => {
 app.patch('/users/:userId', async (req: Request, res: Response) => {
   try {
     const newUserData = req.body
-    const userId = req.params.userId
+    const userId = Number(req.params.userId)
 
     const isUserDataInvalid = isKeyMissed(newUserData, [
       'username',
@@ -183,6 +187,40 @@ app.get('/users', async (req: Request, res: Response) => {
       data: undefined,
       success: false,
     })
+  }
+})
+
+// Get posts "/posts?sort=recent"
+app.get('/posts', async (req: Request, res: Response) => {
+  try {
+    const { sort } = req.query
+
+    if (sort !== 'recent') {
+      return res
+        .status(400)
+        .json({ error: Errors.ClientError, data: undefined, success: false })
+    }
+
+    let postsWithVotes = await prisma.post.findMany({
+      include: {
+        votes: true, // Include associated votes for each post
+        memberPostedBy: {
+          include: {
+            user: true,
+          },
+        },
+        comments: true,
+      },
+      orderBy: {
+        dateCreated: 'desc', // Sorts by dateCreated in descending order
+      },
+    })
+
+    return res.json({ error: undefined, data: { posts: postsWithVotes }, success: true })
+  } catch (error) {
+    return res
+      .status(500)
+      .json({ error: Errors.ServerError, data: undefined, success: false })
   }
 })
 
